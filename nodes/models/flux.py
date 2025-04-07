@@ -2,7 +2,6 @@ import json
 import os
 
 import torch
-from diffusers import FluxPipeline, FluxTransformer2DModel
 from einops import rearrange
 from torch import nn
 
@@ -10,15 +9,11 @@ import comfy.model_patcher
 import folder_paths
 from comfy.ldm.common_dit import pad_to_patch_size
 from comfy.supported_models import Flux, FluxSchnell
-from nunchaku import NunchakuFluxTransformer2dModel
-from nunchaku.caching.diffusers_adapters.flux import apply_cache_on_transformer
-from nunchaku.caching.utils import cache_context, create_cache_context
-from nunchaku.lora.flux.compose import compose_lora
-from nunchaku.utils import is_turing, load_state_dict_in_safetensors
+from nunchaku.utils import is_turing
 
 
 class ComfyFluxWrapper(nn.Module):
-    def __init__(self, model: NunchakuFluxTransformer2dModel, config):
+    def __init__(self, model, config):
         super(ComfyFluxWrapper, self).__init__()
         self.model = model
         self.dtype = next(model.parameters()).dtype
@@ -37,6 +32,11 @@ class ComfyFluxWrapper(nn.Module):
         else:
             assert isinstance(timestep, float)
             timestep_float = timestep
+        from diffusers import FluxPipeline
+        from nunchaku import NunchakuFluxTransformer2dModel
+        from nunchaku.caching.utils import cache_context, create_cache_context
+        from nunchaku.lora.flux.compose import compose_lora
+        from nunchaku.utils import load_state_dict_in_safetensors
 
         model = self.model
         assert isinstance(model, NunchakuFluxTransformer2dModel)
@@ -232,13 +232,15 @@ class NunchakuFluxDiTLoader:
         device_id: int,
         data_type: str,
         **kwargs,
-    ) -> tuple[FluxTransformer2DModel]:
+    ):
         device = f"cuda:{device_id}"
         prefixes = folder_paths.folder_names_and_paths["diffusion_models"][0]
         for prefix in prefixes:
             if os.path.exists(os.path.join(prefix, model_path)):
                 model_path = os.path.join(prefix, model_path)
                 break
+        from nunchaku import NunchakuFluxTransformer2dModel
+        from nunchaku.caching.diffusers_adapters.flux import apply_cache_on_transformer
 
         # Check if the device_id is valid
         if device_id >= torch.cuda.device_count():

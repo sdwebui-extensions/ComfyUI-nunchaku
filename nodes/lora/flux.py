@@ -2,7 +2,6 @@ import copy
 import logging
 
 import folder_paths
-from nunchaku.lora.flux import to_diffusers
 from ..models.flux import ComfyFluxWrapper
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +44,7 @@ class NunchakuFluxLoraLoader:
     def load_lora(self, model, lora_name: str, lora_strength: float):
         model_wrapper = model.model.diffusion_model
         assert isinstance(model_wrapper, ComfyFluxWrapper)
+        from nunchaku.lora.flux import to_diffusers
 
         transformer = model_wrapper.model
         model_wrapper.model = None
