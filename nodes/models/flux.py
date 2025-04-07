@@ -131,6 +131,15 @@ class NunchakuFluxDiTLoader:
     def INPUT_TYPES(s):
         prefixes = folder_paths.folder_names_and_paths["diffusion_models"][0]
         local_folders = set()
+        cache_folders = [
+            'mit-han-lab/svdq-fp4-flux.1-dev',
+            'mit-han-lab/svdq-int4-flux.1-canny-dev',
+            'mit-han-lab/svdq-int4-flux.1-depth-dev',
+            'mit-han-lab/svdq-int4-flux.1-dev',
+            'mit-han-lab/svdq-int4-flux.1-fill-dev',
+            'mit-han-lab/svdq-int4-flux.1-schnell',
+        ]
+        local_folders.update(cache_folders)
         for prefix in prefixes:
             if os.path.exists(prefix) and os.path.isdir(prefix):
                 local_folders_ = os.listdir(prefix)
