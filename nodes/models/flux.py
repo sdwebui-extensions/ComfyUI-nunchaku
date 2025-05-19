@@ -1,12 +1,14 @@
+import gc
 import json
 import os
 
+import comfy.model_management
+import comfy.model_patcher
+import folder_paths
 import torch
 from einops import rearrange
 from torch import nn
 
-import comfy.model_patcher
-import folder_paths
 from comfy.ldm.common_dit import pad_to_patch_size
 from comfy.supported_models import Flux, FluxSchnell
 from nunchaku.utils import is_turing
@@ -23,7 +25,17 @@ class ComfyFluxWrapper(nn.Module):
         self._prev_timestep = None  # for first-block cache
         self._cache_context = None
 
-    def forward(self, x, timestep, context, y, guidance, control=None, transformer_options={}, **kwargs):
+    def forward(
+        self,
+        x,
+        timestep,
+        context,
+        y,
+        guidance,
+        control=None,
+        transformer_options={},
+        **kwargs,
+    ):
         if isinstance(timestep, torch.Tensor):
             if timestep.numel() == 1:
                 timestep_float = timestep.item()
@@ -83,6 +95,8 @@ class ComfyFluxWrapper(nn.Module):
                         model.reset_x_embedder()
                 model.update_lora_params(composed_lora)
 
+        controlnet_block_samples = None if control is None else [y.to(x.dtype) for y in control["input"]]
+        controlnet_single_block_samples = None if control is None else [y.to(x.dtype) for y in control["output"]]
         if getattr(model, "_is_cached", False):
             if self._prev_timestep is None or self._prev_timestep < timestep_float:
                 self._cache_context = create_cache_context()
@@ -95,8 +109,8 @@ class ComfyFluxWrapper(nn.Module):
                     img_ids=img_ids,
                     txt_ids=txt_ids,
                     guidance=guidance if self.config["guidance_embed"] else None,
-                    controlnet_block_samples=None if control is None else control["input"],
-                    controlnet_single_block_samples=None if control is None else control["output"],
+                    controlnet_block_samples=controlnet_block_samples,
+                    controlnet_single_block_samples=controlnet_single_block_samples,
                 ).sample
         else:
             out = model(
@@ -107,11 +121,18 @@ class ComfyFluxWrapper(nn.Module):
                 img_ids=img_ids,
                 txt_ids=txt_ids,
                 guidance=guidance if self.config["guidance_embed"] else None,
-                controlnet_block_samples=None if control is None else control["input"],
-                controlnet_single_block_samples=None if control is None else control["output"],
+                controlnet_block_samples=controlnet_block_samples,
+                controlnet_single_block_samples=controlnet_single_block_samples,
             ).sample
 
-        out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=patch_size, pw=patch_size)
+        out = rearrange(
+            out,
+            "b (h w) (c ph pw) -> b c (h ph) (w pw)",
+            h=h_len,
+            w=w_len,
+            ph=patch_size,
+            pw=patch_size,
+        )
         out = out[:, :, :h, :w]
 
         self._prev_timestep = timestep_float
@@ -126,6 +147,8 @@ class NunchakuFluxDiTLoader:
         self.cpu_offload = None
         self.cache_threshold = None
         self.data_type = None
+        self.patcher = None
+        self.device = comfy.model_management.get_torch_device()
 
     @classmethod
     def INPUT_TYPES(s):
@@ -166,7 +189,10 @@ class NunchakuFluxDiTLoader:
 
         return {
             "required": {
-                "model_path": (model_paths, {"tooltip": "The SVDQuant quantized FLUX.1 models."}),
+                "model_path": (
+                    model_paths,
+                    {"tooltip": "The SVDQuant quantized FLUX.1 models."},
+                ),
                 "cache_threshold": (
                     "FLOAT",
                     {
@@ -192,7 +218,8 @@ class NunchakuFluxDiTLoader:
                     ["auto", "enable", "disable"],
                     {
                         "default": "auto",
-                        "tooltip": "Whether to enable CPU offload for the transformer model. 'auto' will enable it if the GPU memory is less than 14G.",
+                        "tooltip": "Whether to enable CPU offload for the transformer model."
+                        "auto' will enable it if the GPU memory is less than 14G.",
                     },
                 ),
                 "device_id": (
@@ -221,7 +248,8 @@ class NunchakuFluxDiTLoader:
                     ["enabled", "always"],
                     {
                         "default": "enabled",
-                        "tooltip": "The GEMM implementation for 20-series GPUs—this option is only applicable to these GPUs.",
+                        "tooltip": "The GEMM implementation for 20-series GPUs"
+                        "— this option is only applicable to these GPUs.",
                     },
                 )
             },
@@ -280,28 +308,32 @@ class NunchakuFluxDiTLoader:
             self.model_path != model_path
             or self.device != device
             or self.cpu_offload != cpu_offload_enabled
-            or self.cache_threshold != cache_threshold
             or self.data_type != data_type
         ):
             if self.transformer is not None:
+                model_size = comfy.model_management.module_size(self.transformer)
                 transformer = self.transformer
                 self.transformer = None
+                transformer.to("cpu")
                 del transformer
-                torch.cuda.empty_cache()
+                gc.collect()
+                comfy.model_management.cleanup_models_gc()
+                comfy.model_management.soft_empty_cache()
+                comfy.model_management.free_memory(model_size, device)
+
             self.transformer = NunchakuFluxTransformer2dModel.from_pretrained(
                 model_path,
                 offload=cpu_offload_enabled,
                 device=device,
                 torch_dtype=torch.float16 if data_type == "float16" else torch.bfloat16,
             )
-            self.transformer = apply_cache_on_transformer(
-                transformer=self.transformer, residual_diff_threshold=cache_threshold
-            )
             self.model_path = model_path
             self.device = device
             self.cpu_offload = cpu_offload_enabled
-            self.cache_threshold = cache_threshold
-
+        self.transformer = apply_cache_on_transformer(
+            transformer=self.transformer, residual_diff_threshold=cache_threshold
+        )
+        self.cache_threshold = cache_threshold
         transformer = self.transformer
         if attention == "nunchaku-fp16":
             transformer.set_attention_impl("nunchaku-fp16")
