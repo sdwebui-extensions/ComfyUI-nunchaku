@@ -11,7 +11,7 @@ def download_file(
     sub_folder: str,
     new_filename: str | None = None,
 ) -> str:
-    assert os.path.isdir(os.path.join("models", sub_folder))
+    os.makedirs(os.path.join("models", sub_folder), exist_ok=True)
     target_folder = os.path.join("models", sub_folder)
     target_file = os.path.join(target_folder, filename if new_filename is None else new_filename)
     if not os.path.exists(target_file):
@@ -48,6 +48,7 @@ def download_svdquant_models():
         f"mit-han-lab/svdq-{precision}-flux.1-depth-dev",
         f"mit-han-lab/svdq-{precision}-flux.1-fill-dev",
     ]
+    os.makedirs(os.path.join("models", "diffusion_models"), exist_ok=True)
     for model_path in svdquant_models:
         snapshot_download(
             model_path, local_dir=os.path.join("models", "diffusion_models", os.path.basename(model_path))
@@ -81,7 +82,34 @@ def download_loras():
     )
 
 
+def download_other():
+    download_file(
+        repo_id="Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro-2.0",
+        filename="diffusion_pytorch_model.safetensors",
+        sub_folder="controlnet",
+        new_filename="controlnet-union-pro-2.0.safetensors",
+    )
+    download_file(
+        repo_id="jasperai/Flux.1-dev-Controlnet-Upscaler",
+        filename="diffusion_pytorch_model.safetensors",
+        sub_folder="controlnet",
+        new_filename="controlnet-upscaler.safetensors",
+    )
+    download_file(
+        repo_id="black-forest-labs/FLUX.1-Redux-dev",
+        filename="flux1-redux-dev.safetensors",
+        sub_folder="style_models",
+        new_filename="flux1-redux-dev.safetensors",
+    )
+    download_file(
+        repo_id="Comfy-Org/sigclip_vision_384",
+        filename="sigclip_vision_patch14_384.safetensors",
+        sub_folder="clip_vision",
+    )
+
+
 if __name__ == "__main__":
     download_original_models()
     download_svdquant_models()
     download_loras()
+    download_other()
