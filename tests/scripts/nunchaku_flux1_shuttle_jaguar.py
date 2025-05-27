@@ -117,61 +117,40 @@ def import_custom_nodes() -> None:
 from nodes import NODE_CLASS_MAPPINGS
 
 
-def main(precision: str):
+def main(precision: str) -> str:
     import_custom_nodes()
     with torch.inference_mode():
-        dualcliploader = NODE_CLASS_MAPPINGS["DualCLIPLoader"]()
-        dualcliploader_34 = dualcliploader.load_clip(
-            clip_name1="clip_l.safetensors",
-            clip_name2="t5xxl_fp16.safetensors",
-            type="flux",
-            device="default",
+        emptylatentimage = NODE_CLASS_MAPPINGS["EmptyLatentImage"]()
+        emptylatentimage_5 = emptylatentimage.generate(width=1024, height=1024, batch_size=1)
+
+        nunchakutextencoderloader = NODE_CLASS_MAPPINGS["NunchakuTextEncoderLoader"]()
+        nunchakutextencoderloader_31 = nunchakutextencoderloader.load_text_encoder(
+            model_type="flux",
+            text_encoder1="t5xxl_fp16.safetensors",
+            text_encoder2="clip_l.safetensors",
+            t5_min_length=512,
+            use_4bit_t5="disable",
+            int4_model="none",
         )
 
         cliptextencode = NODE_CLASS_MAPPINGS["CLIPTextEncode"]()
-        cliptextencode_7 = cliptextencode.encode(text="", clip=get_value_at_index(dualcliploader_34, 0))
-
-        loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
-        loadimage_17 = loadimage.load_image(image="robot.png")
-
-        cliptextencode_23 = cliptextencode.encode(
-            text="A robot made of exotic candies and chocolates of different kinds. The background is filled with confetti and celebratory gifts, yarn art style",
-            clip=get_value_at_index(dualcliploader_34, 0),
+        cliptextencode_6 = cliptextencode.encode(
+            text="Pirate ship trapped in a cosmic maelstrom nebula, rendered in cosmic beach whirlpool engine, volumetric lighting, spectacular, ambient lights, light pollution, cinematic atmosphere, art nouveau style, illustration art artwork by SenseiJaye, intricate detail.",
+            clip=get_value_at_index(nunchakutextencoderloader_31, 0),
         )
 
         vaeloader = NODE_CLASS_MAPPINGS["VAELoader"]()
-        vaeloader_32 = vaeloader.load_vae(vae_name="ae.safetensors")
+        vaeloader_10 = vaeloader.load_vae(vae_name="ae.safetensors")
 
-        fluxguidance = NODE_CLASS_MAPPINGS["FluxGuidance"]()
-        fluxguidance_26 = fluxguidance.append(guidance=30, conditioning=get_value_at_index(cliptextencode_23, 0))
+        ksamplerselect = NODE_CLASS_MAPPINGS["KSamplerSelect"]()
+        ksamplerselect_16 = ksamplerselect.get_sampler(sampler_name="euler")
 
-        imagescale = NODE_CLASS_MAPPINGS["ImageScale"]()
-        imagescale_38 = imagescale.upscale(
-            upscale_method="nearest-exact",
-            width=1024,
-            height=1024,
-            crop="center",
-            image=get_value_at_index(loadimage_17, 0),
-        )
-
-        canny = NODE_CLASS_MAPPINGS["Canny"]()
-        canny_18 = canny.detect_edge(
-            low_threshold=0.15,
-            high_threshold=0.3,
-            image=get_value_at_index(imagescale_38, 0),
-        )
-
-        instructpixtopixconditioning = NODE_CLASS_MAPPINGS["InstructPixToPixConditioning"]()
-        instructpixtopixconditioning_35 = instructpixtopixconditioning.encode(
-            positive=get_value_at_index(fluxguidance_26, 0),
-            negative=get_value_at_index(cliptextencode_7, 0),
-            vae=get_value_at_index(vaeloader_32, 0),
-            pixels=get_value_at_index(canny_18, 0),
-        )
+        randomnoise = NODE_CLASS_MAPPINGS["RandomNoise"]()
+        randomnoise_25 = randomnoise.get_noise(noise_seed=295081095642106218)
 
         nunchakufluxditloader = NODE_CLASS_MAPPINGS["NunchakuFluxDiTLoader"]()
-        nunchakufluxditloader_42 = nunchakufluxditloader.load_model(
-            model_path=f"svdq-{precision}-flux.1-dev",
+        nunchakufluxditloader_30 = nunchakufluxditloader.load_model(
+            model_path=f"svdq-{precision}-shuttle-jaguar",
             cache_threshold=0,
             attention="nunchaku-fp16",
             cpu_offload="auto",
@@ -180,34 +159,36 @@ def main(precision: str):
             i2f_mode="enabled",
         )
 
-        nunchakufluxloraloader = NODE_CLASS_MAPPINGS["NunchakuFluxLoraLoader"]()
-        ksampler = NODE_CLASS_MAPPINGS["KSampler"]()
+        basicguider = NODE_CLASS_MAPPINGS["BasicGuider"]()
+        basicscheduler = NODE_CLASS_MAPPINGS["BasicScheduler"]()
+        samplercustomadvanced = NODE_CLASS_MAPPINGS["SamplerCustomAdvanced"]()
         vaedecode = NODE_CLASS_MAPPINGS["VAEDecode"]()
         saveimage = NODE_CLASS_MAPPINGS["SaveImage"]()
 
         for q in range(1):
-            nunchakufluxloraloader_43 = nunchakufluxloraloader.load_lora(
-                lora_name="flux1-canny-dev-lora.safetensors",
-                lora_strength=0.8500000000000002,
-                model=get_value_at_index(nunchakufluxditloader_42, 0),
+            basicguider_22 = basicguider.get_guider(
+                model=get_value_at_index(nunchakufluxditloader_30, 0),
+                conditioning=get_value_at_index(cliptextencode_6, 0),
             )
 
-            ksampler_3 = ksampler.sample(
-                seed=2367983337527674677,
-                steps=20,
-                cfg=1,
-                sampler_name="euler",
-                scheduler="normal",
+            basicscheduler_17 = basicscheduler.get_sigmas(
+                scheduler="simple",
+                steps=4,
                 denoise=1,
-                model=get_value_at_index(nunchakufluxloraloader_43, 0),
-                positive=get_value_at_index(instructpixtopixconditioning_35, 0),
-                negative=get_value_at_index(instructpixtopixconditioning_35, 1),
-                latent_image=get_value_at_index(instructpixtopixconditioning_35, 2),
+                model=get_value_at_index(nunchakufluxditloader_30, 0),
+            )
+
+            samplercustomadvanced_13 = samplercustomadvanced.sample(
+                noise=get_value_at_index(randomnoise_25, 0),
+                guider=get_value_at_index(basicguider_22, 0),
+                sampler=get_value_at_index(ksamplerselect_16, 0),
+                sigmas=get_value_at_index(basicscheduler_17, 0),
+                latent_image=get_value_at_index(emptylatentimage_5, 0),
             )
 
             vaedecode_8 = vaedecode.decode(
-                samples=get_value_at_index(ksampler_3, 0),
-                vae=get_value_at_index(vaeloader_32, 0),
+                samples=get_value_at_index(samplercustomadvanced_13, 0),
+                vae=get_value_at_index(vaeloader_10, 0),
             )
 
             saveimage_9 = saveimage.save_images(filename_prefix="ComfyUI", images=get_value_at_index(vaedecode_8, 0))
@@ -220,4 +201,4 @@ def main(precision: str):
 
 
 if __name__ == "__main__":
-    main(get_precision())
+    main(precision=get_precision())
