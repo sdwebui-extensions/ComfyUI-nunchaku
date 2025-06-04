@@ -121,41 +121,51 @@ def main(precision: str):
     import_custom_nodes()
     with torch.inference_mode():
         dualcliploader = NODE_CLASS_MAPPINGS["DualCLIPLoader"]()
-        dualcliploader_16 = dualcliploader.load_clip(
-            clip_name1="t5xxl_fp16.safetensors",
-            clip_name2="clip_l.safetensors",
+        dualcliploader_34 = dualcliploader.load_clip(
+            clip_name1="clip_l.safetensors",
+            clip_name2="t5xxl_fp16.safetensors",
             type="flux",
             device="default",
         )
 
         cliptextencode = NODE_CLASS_MAPPINGS["CLIPTextEncode"]()
-        cliptextencode_1 = cliptextencode.encode(
-            text="a photo of a robot", clip=get_value_at_index(dualcliploader_16, 0)
-        )
-
-        randomnoise = NODE_CLASS_MAPPINGS["RandomNoise"]()
-        randomnoise_7 = randomnoise.get_noise(noise_seed=7432984115782088868)
-
-        emptysd3latentimage = NODE_CLASS_MAPPINGS["EmptySD3LatentImage"]()
-        emptysd3latentimage_9 = emptysd3latentimage.generate(width=1280, height=1280, batch_size=1)
-
-        vaeloader = NODE_CLASS_MAPPINGS["VAELoader"]()
-        vaeloader_17 = vaeloader.load_vae(vae_name="ae.safetensors")
-
-        cliptextencode_18 = cliptextencode.encode(text="", clip=get_value_at_index(dualcliploader_16, 0))
+        cliptextencode_7 = cliptextencode.encode(text="", clip=get_value_at_index(dualcliploader_34, 0))
 
         loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
-        loadimage_19 = loadimage.load_image(image="robot.png")
+        loadimage_17 = loadimage.load_image(image="removal.png")
 
-        ksamplerselect = NODE_CLASS_MAPPINGS["KSamplerSelect"]()
-        ksamplerselect_21 = ksamplerselect.get_sampler(sampler_name="euler")
+        cliptextencode_23 = cliptextencode.encode(text="", clip=get_value_at_index(dualcliploader_34, 0))
 
-        controlnetloader = NODE_CLASS_MAPPINGS["ControlNetLoader"]()
-        controlnetloader_23 = controlnetloader.load_controlnet(control_net_name="controlnet-upscaler.safetensors")
+        vaeloader = NODE_CLASS_MAPPINGS["VAELoader"]()
+        vaeloader_32 = vaeloader.load_vae(vae_name="ae.safetensors")
+
+        fluxguidance = NODE_CLASS_MAPPINGS["FluxGuidance"]()
+        fluxguidance_26 = fluxguidance.append(guidance=30, conditioning=get_value_at_index(cliptextencode_23, 0))
+
+        imageandmaskresizenode = NODE_CLASS_MAPPINGS["ImageAndMaskResizeNode"]()
+        imageandmaskresizenode_58 = imageandmaskresizenode.resize_image_and_mask(
+            width=1280,
+            height=720,
+            resize_method="nearest-exact",
+            crop="center",
+            mask_blur_radius=10,
+            image=get_value_at_index(loadimage_17, 0),
+            mask=get_value_at_index(loadimage_17, 1),
+        )
+
+        inpaintmodelconditioning = NODE_CLASS_MAPPINGS["InpaintModelConditioning"]()
+        inpaintmodelconditioning_38 = inpaintmodelconditioning.encode(
+            noise_mask=False,
+            positive=get_value_at_index(fluxguidance_26, 0),
+            negative=get_value_at_index(cliptextencode_7, 0),
+            vae=get_value_at_index(vaeloader_32, 0),
+            pixels=get_value_at_index(imageandmaskresizenode_58, 0),
+            mask=get_value_at_index(imageandmaskresizenode_58, 1),
+        )
 
         nunchakufluxditloader = NODE_CLASS_MAPPINGS["NunchakuFluxDiTLoader"]()
-        nunchakufluxditloader_26 = nunchakufluxditloader.load_model(
-            model_path=f"svdq-{precision}_r32-flux.1-dev.safetensors",
+        nunchakufluxditloader_59 = nunchakufluxditloader.load_model(
+            model_path=f"svdq-{precision}_r32-flux.1-fill-dev.safetensors",
             cache_threshold=0,
             attention="nunchaku-fp16",
             cpu_offload="auto",
@@ -164,67 +174,38 @@ def main(precision: str):
             i2f_mode="enabled",
         )
 
-        modelsamplingflux = NODE_CLASS_MAPPINGS["ModelSamplingFlux"]()
-        controlnetapplyadvanced = NODE_CLASS_MAPPINGS["ControlNetApplyAdvanced"]()
-        fluxguidance = NODE_CLASS_MAPPINGS["FluxGuidance"]()
-        basicguider = NODE_CLASS_MAPPINGS["BasicGuider"]()
-        basicscheduler = NODE_CLASS_MAPPINGS["BasicScheduler"]()
-        samplercustomadvanced = NODE_CLASS_MAPPINGS["SamplerCustomAdvanced"]()
+        nunchakufluxloraloader = NODE_CLASS_MAPPINGS["NunchakuFluxLoraLoader"]()
+        ksampler = NODE_CLASS_MAPPINGS["KSampler"]()
         vaedecode = NODE_CLASS_MAPPINGS["VAEDecode"]()
         saveimage = NODE_CLASS_MAPPINGS["SaveImage"]()
 
         for q in range(1):
-            modelsamplingflux_11 = modelsamplingflux.patch(
-                max_shift=1.15,
-                base_shift=0.5,
-                width=1280,
-                height=1280,
-                model=get_value_at_index(nunchakufluxditloader_26, 0),
+            nunchakufluxloraloader_60 = nunchakufluxloraloader.load_lora(
+                lora_name="removalV2.safetensors",
+                lora_strength=1.0000000000000002,
+                model=get_value_at_index(nunchakufluxditloader_59, 0),
             )
 
-            controlnetapplyadvanced_25 = controlnetapplyadvanced.apply_controlnet(
-                strength=0.6000000000000001,
-                start_percent=0,
-                end_percent=0.4000000000000001,
-                positive=get_value_at_index(cliptextencode_1, 0),
-                negative=get_value_at_index(cliptextencode_18, 0),
-                control_net=get_value_at_index(controlnetloader_23, 0),
-                image=get_value_at_index(loadimage_19, 0),
-                vae=get_value_at_index(vaeloader_17, 0),
-            )
-
-            fluxguidance_8 = fluxguidance.append(
-                guidance=3.5,
-                conditioning=get_value_at_index(controlnetapplyadvanced_25, 0),
-            )
-
-            basicguider_6 = basicguider.get_guider(
-                model=get_value_at_index(modelsamplingflux_11, 0),
-                conditioning=get_value_at_index(fluxguidance_8, 0),
-            )
-
-            basicscheduler_5 = basicscheduler.get_sigmas(
-                scheduler="simple",
-                steps=28,
+            ksampler_3 = ksampler.sample(
+                seed=53039932755901,
+                steps=20,
+                cfg=1,
+                sampler_name="euler",
+                scheduler="normal",
                 denoise=1,
-                model=get_value_at_index(modelsamplingflux_11, 0),
+                model=get_value_at_index(nunchakufluxloraloader_60, 0),
+                positive=get_value_at_index(inpaintmodelconditioning_38, 0),
+                negative=get_value_at_index(inpaintmodelconditioning_38, 1),
+                latent_image=get_value_at_index(inpaintmodelconditioning_38, 2),
             )
 
-            samplercustomadvanced_4 = samplercustomadvanced.sample(
-                noise=get_value_at_index(randomnoise_7, 0),
-                guider=get_value_at_index(basicguider_6, 0),
-                sampler=get_value_at_index(ksamplerselect_21, 0),
-                sigmas=get_value_at_index(basicscheduler_5, 0),
-                latent_image=get_value_at_index(emptysd3latentimage_9, 0),
+            vaedecode_8 = vaedecode.decode(
+                samples=get_value_at_index(ksampler_3, 0),
+                vae=get_value_at_index(vaeloader_32, 0),
             )
 
-            vaedecode_2 = vaedecode.decode(
-                samples=get_value_at_index(samplercustomadvanced_4, 0),
-                vae=get_value_at_index(vaeloader_17, 0),
-            )
-
-            saveimage_3 = saveimage.save_images(filename_prefix="ComfyUI", images=get_value_at_index(vaedecode_2, 0))
-        filename = saveimage_3["ui"]["images"][0]["filename"]
+            saveimage_9 = saveimage.save_images(filename_prefix="ComfyUI", images=get_value_at_index(vaedecode_8, 0))
+        filename = saveimage_9["ui"]["images"][0]["filename"]
         path = os.path.join("output", filename)
         with open("image_path.txt", "w") as f:
             f.write(path)

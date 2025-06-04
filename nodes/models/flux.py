@@ -1,6 +1,7 @@
 import gc
 import json
 import os
+from pathlib import Path
 
 import comfy.model_management
 import comfy.model_patcher
@@ -11,7 +12,6 @@ from torch import nn
 
 from comfy.ldm.common_dit import pad_to_patch_size
 from comfy.supported_models import Flux, FluxSchnell
-from nunchaku.utils import is_turing
 
 
 class ComfyFluxWrapper(nn.Module):
@@ -154,6 +154,7 @@ class ComfyFluxWrapper(nn.Module):
 class NunchakuFluxDiTLoader:
     def __init__(self):
         self.transformer = None
+        self.metadata = None
         self.model_path = None
         self.device = None
         self.cpu_offload = None
@@ -184,10 +185,23 @@ class NunchakuFluxDiTLoader:
                 ]
                 local_folders.update(local_folders_)
         model_paths = sorted(list(local_folders))
+        safetensor_files = folder_paths.get_filename_list("diffusion_models")
+
+        # exclude the safetensors in svdquant folders
+        new_safetensor_files = []
+        for safetensor_file in safetensor_files:
+            safetensor_path = folder_paths.get_full_path_or_raise("diffusion_models", safetensor_file)
+            safetensor_path = Path(safetensor_path)
+            if not (safetensor_path.parent / "config.json").exists():
+                new_safetensor_files.append(safetensor_file)
+        safetensor_files = new_safetensor_files
+        model_paths = model_paths + safetensor_files
+
         ngpus = torch.cuda.device_count()
 
         all_turing = True
         for i in range(torch.cuda.device_count()):
+            from nunchaku.utils import is_turing
             if not is_turing(f"cuda:{i}"):
                 all_turing = False
 
@@ -280,13 +294,19 @@ class NunchakuFluxDiTLoader:
         device_id: int,
         data_type: str,
         **kwargs,
-    ):
-        device = f"cuda:{device_id}"
-        prefixes = folder_paths.folder_names_and_paths["diffusion_models"][0]
-        for prefix in prefixes:
-            if os.path.exists(os.path.join(prefix, model_path)):
-                model_path = os.path.join(prefix, model_path)
-                break
+    ) -> tuple[FluxTransformer2DModel]:
+        device = torch.device(f"cuda:{device_id}")
+
+        if model_path.endswith((".sft", ".safetensors")):
+            model_path = Path(folder_paths.get_full_path_or_raise("diffusion_models", model_path))
+        else:
+            prefixes = folder_paths.folder_names_and_paths["diffusion_models"][0]
+            for prefix in prefixes:
+                prefix = Path(prefix)
+                if (prefix / model_path).exists() and (prefix / model_path).is_dir():
+                    model_path = prefix / model_path
+                    break
+        
         from nunchaku import NunchakuFluxTransformer2dModel
         from nunchaku.caching.diffusers_adapters.flux import apply_cache_on_transformer
 
@@ -332,11 +352,12 @@ class NunchakuFluxDiTLoader:
                 comfy.model_management.soft_empty_cache()
                 comfy.model_management.free_memory(model_size, device)
 
-            self.transformer = NunchakuFluxTransformer2dModel.from_pretrained(
+            self.transformer, self.metadata = NunchakuFluxTransformer2dModel.from_pretrained(
                 model_path,
                 offload=cpu_offload_enabled,
                 device=device,
                 torch_dtype=torch.float16 if data_type == "float16" else torch.bfloat16,
+                return_metadata=True,
             )
             self.model_path = model_path
             self.device = device
@@ -351,16 +372,20 @@ class NunchakuFluxDiTLoader:
             assert attention == "flash-attention2"
             transformer.set_attention_impl("flashattn2")
 
-        if os.path.exists(os.path.join(model_path, "comfy_config.json")):
-            config_path = os.path.join(model_path, "comfy_config.json")
-        else:
-            default_config_root = os.path.join(os.path.dirname(__file__), "configs")
-            config_name = os.path.basename(model_path).replace("svdq-int4-", "").replace("svdq-fp4-", "")
-            config_path = os.path.join(default_config_root, f"{config_name}.json")
-            assert os.path.exists(config_path), f"Config file not found: {config_path}"
+        if self.metadata is None:
+            if os.path.exists(os.path.join(model_path, "comfy_config.json")):
+                config_path = os.path.join(model_path, "comfy_config.json")
+            else:
+                default_config_root = os.path.join(os.path.dirname(__file__), "configs")
+                config_name = os.path.basename(model_path).replace("svdq-int4-", "").replace("svdq-fp4-", "")
+                config_path = os.path.join(default_config_root, f"{config_name}.json")
+                assert os.path.exists(config_path), f"Config file not found: {config_path}"
 
-        print(f"Loading configuration from {config_path}")
-        comfy_config = json.load(open(config_path, "r"))
+            print(f"Loading ComfyUI model config from {config_path}")
+            comfy_config = json.load(open(config_path, "r"))
+        else:
+            comfy_config_str = self.metadata.get("comfy_config", None)
+            comfy_config = json.loads(comfy_config_str)
         model_class_name = comfy_config["model_class"]
         if model_class_name == "FluxSchnell":
             model_class = FluxSchnell

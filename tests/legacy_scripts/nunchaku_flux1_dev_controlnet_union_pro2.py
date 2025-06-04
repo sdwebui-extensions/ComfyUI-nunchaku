@@ -130,14 +130,15 @@ def main(precision: str):
 
         cliptextencode = NODE_CLASS_MAPPINGS["CLIPTextEncode"]()
         cliptextencode_1 = cliptextencode.encode(
-            text="a photo of a robot", clip=get_value_at_index(dualcliploader_16, 0)
+            text="A whimsical fantasy scene featuring a towering, ancient tree house nestled within a massive, glowing mushroom. The mushroom cap forms the roof, illuminating the surroundings with a warm, golden light. The tree’s gnarled branches are intertwined with smaller mushrooms, each with glowing windows and doors, creating a multi-level dwelling. The base of the tree is surrounded by lush moss, tiny glowing flowers, and a stone pathway leading to the entrance. In the background, a misty forest with cascading waterfalls enhances the magical atmosphere, while the night sky sparkles faintly with distant stars. It is a masterpiece.",
+            clip=get_value_at_index(dualcliploader_16, 0),
         )
 
         randomnoise = NODE_CLASS_MAPPINGS["RandomNoise"]()
-        randomnoise_7 = randomnoise.get_noise(noise_seed=7432984115782088868)
+        randomnoise_7 = randomnoise.get_noise(noise_seed=13412377781951714641)
 
         emptysd3latentimage = NODE_CLASS_MAPPINGS["EmptySD3LatentImage"]()
-        emptysd3latentimage_9 = emptysd3latentimage.generate(width=1280, height=1280, batch_size=1)
+        emptysd3latentimage_9 = emptysd3latentimage.generate(width=800, height=1200, batch_size=1)
 
         vaeloader = NODE_CLASS_MAPPINGS["VAELoader"]()
         vaeloader_17 = vaeloader.load_vae(vae_name="ae.safetensors")
@@ -145,17 +146,17 @@ def main(precision: str):
         cliptextencode_18 = cliptextencode.encode(text="", clip=get_value_at_index(dualcliploader_16, 0))
 
         loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
-        loadimage_19 = loadimage.load_image(image="robot.png")
+        loadimage_19 = loadimage.load_image(image="mushroom_depth.webp")
 
         ksamplerselect = NODE_CLASS_MAPPINGS["KSamplerSelect"]()
         ksamplerselect_21 = ksamplerselect.get_sampler(sampler_name="euler")
 
         controlnetloader = NODE_CLASS_MAPPINGS["ControlNetLoader"]()
-        controlnetloader_23 = controlnetloader.load_controlnet(control_net_name="controlnet-upscaler.safetensors")
+        controlnetloader_23 = controlnetloader.load_controlnet(control_net_name="controlnet-union-pro-2.0.safetensors")
 
         nunchakufluxditloader = NODE_CLASS_MAPPINGS["NunchakuFluxDiTLoader"]()
         nunchakufluxditloader_26 = nunchakufluxditloader.load_model(
-            model_path=f"svdq-{precision}_r32-flux.1-dev.safetensors",
+            model_path=f"svdq-{precision}-flux.1-dev",
             cache_threshold=0,
             attention="nunchaku-fp16",
             cpu_offload="auto",
@@ -165,6 +166,7 @@ def main(precision: str):
         )
 
         modelsamplingflux = NODE_CLASS_MAPPINGS["ModelSamplingFlux"]()
+        setunioncontrolnettype = NODE_CLASS_MAPPINGS["SetUnionControlNetType"]()
         controlnetapplyadvanced = NODE_CLASS_MAPPINGS["ControlNetApplyAdvanced"]()
         fluxguidance = NODE_CLASS_MAPPINGS["FluxGuidance"]()
         basicguider = NODE_CLASS_MAPPINGS["BasicGuider"]()
@@ -177,9 +179,13 @@ def main(precision: str):
             modelsamplingflux_11 = modelsamplingflux.patch(
                 max_shift=1.15,
                 base_shift=0.5,
-                width=1280,
-                height=1280,
+                width=800,
+                height=1200,
                 model=get_value_at_index(nunchakufluxditloader_26, 0),
+            )
+
+            setunioncontrolnettype_22 = setunioncontrolnettype.set_controlnet_type(
+                type="depth", control_net=get_value_at_index(controlnetloader_23, 0)
             )
 
             controlnetapplyadvanced_25 = controlnetapplyadvanced.apply_controlnet(
@@ -188,7 +194,7 @@ def main(precision: str):
                 end_percent=0.4000000000000001,
                 positive=get_value_at_index(cliptextencode_1, 0),
                 negative=get_value_at_index(cliptextencode_18, 0),
-                control_net=get_value_at_index(controlnetloader_23, 0),
+                control_net=get_value_at_index(setunioncontrolnettype_22, 0),
                 image=get_value_at_index(loadimage_19, 0),
                 vae=get_value_at_index(vaeloader_17, 0),
             )
