@@ -294,7 +294,7 @@ class NunchakuFluxDiTLoader:
         device_id: int,
         data_type: str,
         **kwargs,
-    ) -> tuple[FluxTransformer2DModel]:
+    ):
         device = torch.device(f"cuda:{device_id}")
 
         if model_path.endswith((".sft", ".safetensors")):
