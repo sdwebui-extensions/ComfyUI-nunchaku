@@ -15,10 +15,11 @@ Join our user groups on [**Slack**](https://join.slack.com/t/nunchaku/shared_inv
 
 # Nunchaku ComfyUI Node
 
-![comfyui](https://cas-bridge.xethub.hf.co/xet-bridge-us/6809c14d122d22df4c286c5c/75aba8411336c4e6d52636912289086d19a0dc01438b9953e9e6fc40032cd5fc?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=cas%2F20250602%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250602T052600Z&X-Amz-Expires=3600&X-Amz-Signature=bb4114b8cb92ce976305c327a9ff82556bd93557092bbeb4a9daa564ebb0cc79&X-Amz-SignedHeaders=host&X-Xet-Cas-Uid=63129589bbaa385279d1826e&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27comfyui.jpg%3B+filename%3D%22comfyui.jpg%22%3B&response-content-type=image%2Fjpeg&x-id=GetObject&Expires=1748845560&Policy=eyJTdGF0ZW1lbnQiOlt7IkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc0ODg0NTU2MH19LCJSZXNvdXJjZSI6Imh0dHBzOi8vY2FzLWJyaWRnZS54ZXRodWIuaGYuY28veGV0LWJyaWRnZS11cy82ODA5YzE0ZDEyMmQyMmRmNGMyODZjNWMvNzVhYmE4NDExMzM2YzRlNmQ1MjYzNjkxMjI4OTA4NmQxOWEwZGMwMTQzOGI5OTUzZTllNmZjNDAwMzJjZDVmYyoifV19&Signature=atydH0AEc4QZUDZ1Qz4qkgQ2EiU-34-1tEgw4wN27hbsW1SDyD63RyDFiWphxYDAN74l9hghmHDkma7ddfUox5Ckl9Jw3zFOtW26I0FLSoM7L6czyD5ob0qBvbAY7A5oWHpzUgxR9L-uhFdWuFgIpCvHqe0y%7EEH3dtlmvXzOcltE2XnFRgfJTwtVJxJXqcklHtMPz1pI92KSUiOZUwLjbwnTdKvbl8ysng8tkWkP9N2c9P-vvibMdyolR2zqK3rHCAV709m8wqOKrTpc%7EciQEKTjsJy%7Ek68wUGDjy3usNjMSC9D5xeV7U3456jX6MjyMj%7EEGzzsEUYmqf989Kk%7EF9Q__&Key-Pair-Id=K2L8F4GPSG1IFC)
+![comfyui](https://huggingface.co/mit-han-lab/nunchaku-artifacts/resolve/main/ComfyUI-nunchaku/assets/comfyui.jpg)
 
 ## News
 
+- **[2025-06-07]** 🚀 **Release Patch v0.3.1!** We bring back **FB Cache** support and fix **4-bit text encoder loading**. PuLID nodes are now optional and won’t interfere with other nodes. We've also added a **NunchakuWheelInstaller** node to help you install the correct [Nunchaku](https://github.com/mit-han-lab/nunchaku) wheel.
 - **[2025-06-01]** 🚀 **Release v0.3.0!** This update adds support for multiple-batch inference, [**ControlNet-Union-Pro 2.0**](https://huggingface.co/Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro-2.0) and initial integration of [**PuLID**](https://github.com/ToTheBeginning/PuLID). You can now load Nunchaku FLUX models as a single file, and our upgraded [**4-bit T5 encoder**](https://huggingface.co/mit-han-lab/nunchaku-t5) now matches **FP8 T5** in quality!
 - **[2025-04-16]** 🎥 Released tutorial videos in both [**English**](https://youtu.be/YHAVe-oM7U8?si=cM9zaby_aEHiFXk0) and [**Chinese**](https://www.bilibili.com/video/BV1BTocYjEk5/?share_source=copy_web&vd_source=8926212fef622f25cc95380515ac74ee) to assist installation and usage.
 - **[2025-04-09]** 📢 Published the [April roadmap](https://github.com/mit-han-lab/nunchaku/issues/266) and an [FAQ](https://github.com/mit-han-lab/nunchaku/discussions/262) to help the community get started and stay up to date with Nunchaku’s development.
@@ -151,6 +152,11 @@ comfy node registry-install ComfyUI-nunchaku  # Install Nunchaku
 
   - Select the CLIP and T5 models to use as `text_encoder1` and `text_encoder2`, following the same convention as in `DualCLIPLoader`. In addition, you may choose to use our enhanced [4-bit T5XXL model](https://huggingface.co/mit-han-lab/nunchaku-t5/resolve/main/awq-int4-flux.1-t5xxl.safetensors) for saving more GPU memory.
   - `t5_min_length`: Sets the minimum sequence length for T5 text embeddings. The default in `DualCLIPLoader` is hardcoded to 256, but for better image quality, use 512 here.
+
+- **Nunchaku Wheel Installer**: A utility node for automatically installing the correct version of [Nunchaku](https://github.com/mit-han-lab/nunchaku) wheels. After installation, please **restart ComfyUI** to apply the changes.
+
+  - `source`: Select the source of the wheel. Available options include [`GitHub Release`](https://github.com/mit-han-lab/nunchaku/releases), [`HuggingFace`](https://huggingface.co/mit-han-lab/nunchaku), and [`ModelScope`](https://modelscope.cn/models/Lmxyy1999/nunchaku).
+  - `version`: Choose the compatible [Nunchaku](https://github.com/mit-han-lab/nunchaku) version to install.
 
 - **Nunchaku Text Encoder Loader (will be deprecated in v0.4)**: A node for loading the text encoders.
 
