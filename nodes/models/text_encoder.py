@@ -123,7 +123,7 @@ class NunchakuTextEncoderLoader:
 
     CATEGORY = "Nunchaku"
 
-    TITLE = "Nunchaku Text Encoder Loader"
+    TITLE = "Nunchaku Text Encoder Loader (Deprecated)"
 
     def load_text_encoder(
         self,
