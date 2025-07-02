@@ -1,4 +1,8 @@
 models:
+  - repo_id: "comfyanonymous/flux_text_encoders"
+    filename: "t5xxl_fp8_e4m3fn_scaled.safetensors"
+    sub_folder: "text_encoders"
+    new_filename: "t5xxl_fp8_e4m3fn_scaled.safetensors"
   # loras
   - repo_id: "alimama-creative/FLUX.1-Turbo-Alpha"
     filename: "diffusion_pytorch_model.safetensors"
@@ -56,6 +60,10 @@ models:
     new_filename: null
   - repo_id: "mit-han-lab/nunchaku-shuttle-jaguar"
     filename: "svdq-{precision}_r32-shuttle-jaguar.safetensors"
+    sub_folder: "diffusion_models"
+    new_filename: null
+  - repo_id: "mit-han-lab/nunchaku-flux.1-kontext-dev"
+    filename: "svdq-{precision}_r32-flux.1-kontext-dev.safetensors"
     sub_folder: "diffusion_models"
     new_filename: null
   # pulid related
