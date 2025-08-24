@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class NunchakuFluxDiTLoader:
     """
-    Loader for SVDQuant-quantized FLUX.1 models with Nunchaku acceleration.
+    Loader for Nunchaku FLUX.1 models.
 
     This class manages model loading, device selection, attention implementation,
     CPU offload, and caching for efficient inference.
@@ -71,7 +71,7 @@ class NunchakuFluxDiTLoader:
     @classmethod
     def INPUT_TYPES(s):
         """
-        Defines the input types and tooltips for the node.
+        Define the input types and tooltips for the node.
 
         Returns
         -------
@@ -261,16 +261,16 @@ class NunchakuFluxDiTLoader:
         if cpu_offload == "auto":
             if gpu_memory < 14336:  # 14GB threshold
                 cpu_offload_enabled = True
-                print("VRAM < 14GiB，enable CPU offload")
+                print("VRAM < 14GiB, enabling CPU offload")
             else:
                 cpu_offload_enabled = False
-                print("VRAM > 14GiB，disable CPU offload")
+                print("VRAM > 14GiB, disabling CPU offload")
         elif cpu_offload == "enable":
             cpu_offload_enabled = True
-            print("Enable CPU offload")
+            print("Enabling CPU offload")
         else:
             cpu_offload_enabled = False
-            print("Disable CPU offload")
+            print("Disabling CPU offload")
 
         if (
             self.model_path != model_path
@@ -299,6 +299,7 @@ class NunchakuFluxDiTLoader:
             self.model_path = model_path
             self.device = device
             self.cpu_offload = cpu_offload_enabled
+            self.data_type = data_type
         self.transformer = apply_cache_on_transformer(
             transformer=self.transformer, residual_diff_threshold=cache_threshold
         )

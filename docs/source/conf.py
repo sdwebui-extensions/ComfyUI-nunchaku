@@ -6,6 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -24,7 +25,7 @@ with open(toml_path, "rb") as f:
     version = data["project"]["version"]
 
 if "dev" in version:
-    version = version.replace("dev", "")
+    version = re.sub(r"dev\d*", "", version)
 
 release = version
 # -- General configuration ---------------------------------------------------
