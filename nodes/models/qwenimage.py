@@ -12,9 +12,10 @@ import folder_paths
 import torch
 from comfy import model_detection, model_management
 
-from nunchaku.utils import check_hardware_compatibility, get_precision_from_quantization_config
+from nunchaku.utils import check_hardware_compatibility, get_gpu_memory, get_precision_from_quantization_config
 
 from ...model_configs.qwenimage import NunchakuQwenImage
+from ...model_patcher import NunchakuModelPatcher
 
 # Get log level from environment variable (default to INFO)
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -62,7 +63,6 @@ def load_diffusion_model_state_dict(
     load_device = model_management.get_torch_device()
     check_hardware_compatibility(quantization_config, load_device)
 
-    # model_config = model_detection.model_config_from_unet_config({"image_model": "qwen_image"}, state_dict=sd)
     model_config = NunchakuQwenImage(
         {"image_model": "qwen_image", "scale_shift": 0, "rank": rank, "precision": precision}
     )
@@ -93,7 +93,7 @@ def load_diffusion_model_state_dict(
     model = model_config.get_model(new_sd, "")
     model = model.to(offload_device)
     model.load_model_weights(new_sd, "")
-    return comfy.model_patcher.ModelPatcher(model, load_device=load_device, offload_device=offload_device)
+    return NunchakuModelPatcher(model, load_device=load_device, offload_device=offload_device)
 
 
 class NunchakuQwenImageDiTLoader:
@@ -128,6 +128,14 @@ class NunchakuQwenImageDiTLoader:
                     folder_paths.get_filename_list("diffusion_models"),
                     {"tooltip": "The Nunchaku Qwen-Image model."},
                 ),
+                "cpu_offload": (
+                    ["auto", "enable", "disable"],
+                    {
+                        "default": "auto",
+                        "tooltip": "Whether to enable CPU offload for the transformer model."
+                        "auto' will enable it if the GPU memory is less than 15G.",
+                    },
+                ),
             },
         }
 
@@ -136,7 +144,7 @@ class NunchakuQwenImageDiTLoader:
     CATEGORY = "Nunchaku"
     TITLE = "Nunchaku Qwen-Image DiT Loader"
 
-    def load_model(self, model_name: str, **kwargs):
+    def load_model(self, model_name: str, cpu_offload: str, **kwargs):
         """
         Load the Qwen-Image model from file and return a patched model.
 
@@ -144,6 +152,8 @@ class NunchakuQwenImageDiTLoader:
         ----------
         model_name : str
             The filename of the Qwen-Image model to load.
+        cpu_offload : str
+            Whether to enable CPU offload for the transformer model.
 
         Returns
         -------
@@ -153,4 +163,23 @@ class NunchakuQwenImageDiTLoader:
         model_path = folder_paths.get_full_path_or_raise("diffusion_models", model_name)
         sd, metadata = comfy.utils.load_torch_file(model_path, return_metadata=True)
         model = load_diffusion_model_state_dict(sd, metadata=metadata)
+
+        if cpu_offload == "auto":
+            if get_gpu_memory() < 15:  # 15GB threshold
+                cpu_offload_enabled = True
+                logger.info("VRAM < 15GiB, enabling CPU offload")
+            else:
+                cpu_offload_enabled = False
+                logger.info("VRAM > 15GiB, disabling CPU offload")
+        elif cpu_offload == "enable":
+            cpu_offload_enabled = True
+            logger.info("Enabling CPU offload")
+        else:
+            assert cpu_offload == "disable", "Invalid CPU offload option"
+            cpu_offload_enabled = False
+            logger.info("Disabling CPU offload")
+
+        if cpu_offload_enabled:
+            model.model.diffusion_model.set_offload(cpu_offload_enabled)
+
         return (model,)
