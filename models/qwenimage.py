@@ -572,6 +572,7 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
         encoder_hidden_states_mask: torch.Tensor,
         temb: torch.Tensor,
         image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        transformer_options: dict = {},
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass for the transformer block.
@@ -625,6 +626,7 @@ class NunchakuQwenImageTransformerBlock(nn.Module):
             encoder_hidden_states=txt_modulated,  # Text stream ("context")
             encoder_hidden_states_mask=encoder_hidden_states_mask,
             image_rotary_emb=image_rotary_emb,
+            transformer_options=transformer_options,
         )
 
         # QwenAttnProcessor2_0 returns (img_output, txt_output) when encoder_hidden_states is provided
