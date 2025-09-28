@@ -240,12 +240,9 @@ class Attention(nn.Module):
         self.to_add_out = SVDQW4A4Linear(
             self.inner_dim, self.out_context_dim, bias=out_bias, torch_dtype=dtype, device=device, **kwargs
         )
+        self.overlap_num = 0
         if args.world_size>1 and (not has_nvlink):
             self.overlap_num = self.heads // (2 * args.world_size)
-            if self.overlap_num > 1:
-                if args.rank == 0:
-                    logging.info(f"no nvlink and self.overlap_num={self.overlap_num}, using compute and communication overlap")
-                self.forward = self.forward_overlap
 
     def forward(
         self,
@@ -279,6 +276,8 @@ class Attention(nn.Module):
         txt_attn_output : torch.Tensor
             Output tensor for text stream.
         """
+        if self.overlap_num > 1:
+            return self.forward_overlap(hidden_states, encoder_hidden_states, encoder_hidden_states_mask, attention_mask, image_rotary_emb, transformer_options)
         seq_txt = encoder_hidden_states.shape[1]
 
         img_qkv = self.to_qkv(hidden_states)
@@ -391,7 +390,7 @@ class Attention(nn.Module):
         sp_lens = transformer_options.get('sp_len')
 
         img_qkv = torch.cat([img_query, img_key, img_value], dim=0)
-        img_qkv_lists = img_qkv.chunk(self.overlap_num, 2)
+        img_qkv_lists = img_qkv.tensor_split(self.overlap_num, 2)
         output_qkv_workers = []
         for qkv_data in img_qkv_lists:
             qkv_data_list = tensor_chunk(qkv_data, -2)
