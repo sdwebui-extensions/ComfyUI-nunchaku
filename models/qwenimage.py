@@ -25,6 +25,8 @@ from torch import nn
 from nunchaku.models.linear import AWQW4A16Linear, SVDQW4A4Linear
 from nunchaku.models.utils import CPUOffloadManager
 from nunchaku.ops.fused import fused_gelu_mlp
+from dist_utils import all_all_async, args, tensor_chunk, all_gather, all_all, has_nvlink, all_gather_async
+import logging
 
 from ..mixins.model import NunchakuModelMixin
 
@@ -238,6 +240,12 @@ class Attention(nn.Module):
         self.to_add_out = SVDQW4A4Linear(
             self.inner_dim, self.out_context_dim, bias=out_bias, torch_dtype=dtype, device=device, **kwargs
         )
+        if args.world_size>1 and (not has_nvlink):
+            self.overlap_num = self.heads // (2 * args.world_size)
+            if self.overlap_num > 1:
+                if args.rank == 0:
+                    logging.info(f"no nvlink and self.overlap_num={self.overlap_num}, using compute and communication overlap")
+                self.forward = self.forward_overlap
 
     def forward(
         self,
@@ -246,6 +254,7 @@ class Attention(nn.Module):
         encoder_hidden_states_mask: torch.FloatTensor = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         image_rotary_emb: Optional[torch.Tensor] = None,
+        transformer_options={},
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass for double-stream attention.
@@ -274,45 +283,182 @@ class Attention(nn.Module):
 
         img_qkv = self.to_qkv(hidden_states)
         img_query, img_key, img_value = img_qkv.chunk(3, dim=-1)
+        img_query = img_query.unflatten(-1, (self.heads, -1))
+        img_key = img_key.unflatten(-1, (self.heads, -1))
+        img_value = img_value.unflatten(-1, (self.heads, -1))
+        b, _, _, d = img_value.shape
+        if args.world_size>1:
+            sp_lens = transformer_options.get('sp_len')
+            v_data_list = tensor_chunk(img_value, -2)
+            val_datashapes = [[b, sp_lens[rank_i], v_data_list[rank_i].size(-2), d] for rank_i in range(args.world_size)]
+            output_val_list, val_async_worker, val_datashapes = all_all_async(img_value, -2, val_datashapes, v_data_list)
+            img_query = self.norm_q(img_query)
+            img_key = self.norm_k(img_key)
+            output_q_list, q_async_worker, _ = all_all_async(img_query, -2, val_datashapes)
+            output_k_list, k_async_worker, _ = all_all_async(img_key, -2, val_datashapes)
+        else:
+            img_query = self.norm_q(img_query)
+            img_key = self.norm_k(img_key)
 
         # Compute QKV for text stream (context projections)
         txt_qkv = self.add_qkv_proj(encoder_hidden_states)
         txt_query, txt_key, txt_value = txt_qkv.chunk(3, dim=-1)
 
-        img_query = img_query.unflatten(-1, (self.heads, -1))
-        img_key = img_key.unflatten(-1, (self.heads, -1))
-        img_value = img_value.unflatten(-1, (self.heads, -1))
-
         txt_query = txt_query.unflatten(-1, (self.heads, -1))
         txt_key = txt_key.unflatten(-1, (self.heads, -1))
         txt_value = txt_value.unflatten(-1, (self.heads, -1))
 
-        img_query = self.norm_q(img_query)
-        img_key = self.norm_k(img_key)
         txt_query = self.norm_added_q(txt_query)
         txt_key = self.norm_added_k(txt_key)
 
-        # Concatenate image and text streams for joint attention
-        joint_query = torch.cat([txt_query, img_query], dim=1)
-        joint_key = torch.cat([txt_key, img_key], dim=1)
-        joint_value = torch.cat([txt_value, img_value], dim=1)
+        if args.world_size>1:
+            txt_data_list = tensor_chunk(txt_value, 2)
+            txt_value = txt_data_list[args.rank]
+            txt_query = tensor_chunk(txt_query, 2)[args.rank]
+            txt_key = tensor_chunk(txt_key, 2)[args.rank]
 
-        # Apply rotary embeddings
-        joint_query = apply_rotary_emb(joint_query, image_rotary_emb)
-        joint_key = apply_rotary_emb(joint_key, image_rotary_emb)
+            val_async_worker.wait()
+            img_value = torch.cat(output_val_list, dim=-3).contiguous()
+            joint_value = torch.cat([txt_value, img_value], dim=1)
+            joint_value = joint_value.flatten(start_dim=2)
 
-        joint_query = joint_query.flatten(start_dim=2)
-        joint_key = joint_key.flatten(start_dim=2)
-        joint_value = joint_value.flatten(start_dim=2)
+            q_async_worker.wait()
+            img_query = torch.cat(output_q_list, dim=-3).contiguous()
+            joint_query = torch.cat([txt_query, img_query], dim=1)
+            joint_query = apply_rotary_emb(joint_query, image_rotary_emb)
+            heads = joint_query.size(-2)
+            joint_query = joint_query.flatten(start_dim=2)
+
+            k_async_worker.wait()
+            img_key = torch.cat(output_k_list, dim=-3).contiguous()
+            joint_key = torch.cat([txt_key, img_key], dim=1)
+            joint_key = apply_rotary_emb(joint_key, image_rotary_emb)
+            joint_key = joint_key.flatten(start_dim=2)
+
+        else:
+            joint_value = torch.cat([txt_value, img_value], dim=1)
+            joint_value = joint_value.flatten(start_dim=2)
+
+            joint_query = torch.cat([txt_query, img_query], dim=1)
+            joint_query = apply_rotary_emb(joint_query, image_rotary_emb)
+            heads = joint_query.size(-2)
+            joint_query = joint_query.flatten(start_dim=2)
+
+            joint_key = torch.cat([txt_key, img_key], dim=1)
+            joint_key = apply_rotary_emb(joint_key, image_rotary_emb)
+            joint_key = joint_key.flatten(start_dim=2)
 
         # Compute joint attention
         joint_hidden_states = optimized_attention_masked(
-            joint_query, joint_key, joint_value, self.heads, attention_mask
+            joint_query, joint_key, joint_value, heads, attention_mask
         )
 
         # Split results back to separate streams
         txt_attn_output = joint_hidden_states[:, :seq_txt, :]
         img_attn_output = joint_hidden_states[:, seq_txt:, :]
+
+        if args.world_size>1:
+            data_shapes = [[b, sp_lens[args.rank], val_datashapes[rank_i][2] * val_datashapes[rank_i][3]] for rank_i in range(args.world_size)]
+            img_attn_output = all_all(img_attn_output, -2, -1, data_shapes, sp_lens)
+            txt_attn_output = all_gather([_.flatten(start_dim=2) for _ in txt_data_list], txt_attn_output, 2)
+
+        img_attn_output = self.to_out[0](img_attn_output)
+        img_attn_output = self.to_out[1](img_attn_output)
+        txt_attn_output = self.to_add_out(txt_attn_output)
+
+        return img_attn_output, txt_attn_output
+    
+    def forward_overlap(
+        self,
+        hidden_states: torch.FloatTensor,  # Image stream
+        encoder_hidden_states: torch.FloatTensor = None,  # Text stream
+        encoder_hidden_states_mask: torch.FloatTensor = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        image_rotary_emb: Optional[torch.Tensor] = None,
+        transformer_options={},
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        seq_txt = encoder_hidden_states.shape[1]
+
+        img_qkv = self.to_qkv(hidden_states)
+        img_query, img_key, img_value = img_qkv.chunk(3, dim=-1)
+        img_query = img_query.unflatten(-1, (self.heads, -1))
+        img_key = img_key.unflatten(-1, (self.heads, -1))
+        img_value = img_value.unflatten(-1, (self.heads, -1))
+        img_query = self.norm_q(img_query)
+        img_key = self.norm_k(img_key)
+        b, _, _, d = img_value.shape
+
+        sp_lens = transformer_options.get('sp_len')
+
+        img_qkv = torch.cat([img_query, img_key, img_value], dim=0)
+        img_qkv_lists = img_qkv.chunk(self.overlap_num, 2)
+        output_qkv_workers = []
+        for qkv_data in img_qkv_lists:
+            qkv_data_list = tensor_chunk(qkv_data, -2)
+            qkv_datashapes = [[3 * b, sp_lens[rank_i], qkv_data_list[rank_i].size(-2), d] for rank_i in range(args.world_size)]
+            output_qkv_list, qkv_async_worker, _ = all_all_async(img_qkv, -2, qkv_datashapes, qkv_data_list)
+            output_qkv_workers.append([output_qkv_list, qkv_async_worker])
+
+        txt_qkv = self.add_qkv_proj(encoder_hidden_states)
+        txt_query, txt_key, txt_value = txt_qkv.chunk(3, dim=-1)
+
+        txt_query = txt_query.unflatten(-1, (self.heads, -1))
+        txt_key = txt_key.unflatten(-1, (self.heads, -1))
+        txt_value = txt_value.unflatten(-1, (self.heads, -1))
+
+        txt_query = self.norm_added_q(txt_query)
+        txt_key = self.norm_added_k(txt_key)
+
+        txt_key_lists = txt_key.chunk(self.overlap_num, 2)
+        txt_query_lists = txt_query.chunk(self.overlap_num, 2)
+        txt_value_lists = txt_value.chunk(self.overlap_num, 2)
+        img_attn_output_works_lists = []
+        txt_attn_output_works_lists = []
+
+        for data_idx, output_qkv_worker in enumerate(output_qkv_workers):
+            qkv_list, qkv_worker = output_qkv_worker
+
+            txt_key_list = tensor_chunk(txt_key_lists[data_idx], 2)
+            _txt_key = txt_key_list[args.rank]
+            _txt_query = tensor_chunk(txt_query_lists[data_idx], 2)[args.rank]
+            _txt_value = tensor_chunk(txt_value_lists[data_idx], 2)[args.rank]
+
+            qkv_worker.wait()
+            q, k, v = torch.cat(qkv_list, dim=1).chunk(3, 0)
+
+            joint_value = torch.cat([_txt_value, v], dim=1)
+            joint_value = joint_value.flatten(start_dim=2)
+
+            joint_query = torch.cat([_txt_query, q], dim=1)
+            joint_query = apply_rotary_emb(joint_query, image_rotary_emb)
+            heads = joint_query.size(-2)
+            joint_query = joint_query.flatten(start_dim=2)
+
+            joint_key = torch.cat([_txt_key, k], dim=1)
+            joint_key = apply_rotary_emb(joint_key, image_rotary_emb)
+            joint_key = joint_key.flatten(start_dim=2)
+
+            joint_hidden_states = optimized_attention_masked(joint_query, joint_key, joint_value, heads, attention_mask, transformer_options=transformer_options)
+            txt_attn_output = joint_hidden_states[:, :seq_txt, :]
+            img_attn_output = joint_hidden_states[:, seq_txt:, :]
+            data_shapes = [[b, sp_lens[args.rank], txt_key_list[rank_i].size(2) * d] for rank_i in range(args.world_size)]
+
+            img_attn_output_list, img_attn_output_worker, _ = all_all_async(img_attn_output, 1, data_shapes, tensor_chunk(img_attn_output, 1))
+            img_attn_output_works_lists.append([img_attn_output_list, img_attn_output_worker])
+            txt_attn_output_list, txt_attn_output_worker = all_gather_async([_.flatten(start_dim=2) for _ in txt_key_list], txt_attn_output, 2)
+            txt_attn_output_works_lists.append([txt_attn_output_list, txt_attn_output_worker])
+
+        img_outs = []
+        txt_outs = []
+        for img_idx, (img_out, img_worker) in enumerate(img_attn_output_works_lists):
+            img_worker.wait()
+            img_outs.append(torch.cat(img_out, dim=2))
+            txt_out, txt_worker = txt_attn_output_works_lists[img_idx]
+            txt_worker.wait()
+            txt_outs.append(torch.cat(txt_out, dim=2))
+
+        img_attn_output = torch.cat(img_outs, dim=2)
+        txt_attn_output = torch.cat(txt_outs, dim=2)
 
         img_attn_output = self.to_out[0](img_attn_output)
         img_attn_output = self.to_out[1](img_attn_output)
@@ -701,6 +847,11 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
             .reshape(1, -1, 1)
             .repeat(x.shape[0], 1, 3)
         )
+        if args.world_size>1:
+            img_lists = tensor_chunk(hidden_states, -2)
+            hidden_states = img_lists[args.rank]
+            sp_len = [img_lists[idx].size(-2) for idx in range(args.world_size)]
+            transformer_options['sp_len'] = sp_len
         ids = torch.cat((txt_ids, img_ids), dim=1)
         image_rotary_emb = self.pe_embedder(ids).squeeze(1).unsqueeze(2).to(x.dtype)
         del ids, txt_ids, img_ids
@@ -740,6 +891,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                             encoder_hidden_states_mask=encoder_hidden_states_mask,
                             temb=args["vec"],
                             image_rotary_emb=args["pe"],
+                            transformer_options=args["transformer_options"]
                         )
                         return out
 
@@ -756,6 +908,7 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
                         encoder_hidden_states_mask=encoder_hidden_states_mask,
                         temb=temb,
                         image_rotary_emb=image_rotary_emb,
+                        transformer_options=transformer_options,
                     )
                 # ControlNet helpers(device/dtype-safe residual adds)
                 _control = (
@@ -789,6 +942,12 @@ class NunchakuQwenImageTransformer2DModel(NunchakuModelMixin, QwenImageTransform
 
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
+
+        if args.world_size>1:
+            bs, _, ndim = hidden_states.shape
+            # datas = [hidden_states.new_empty((bs, img_lists[rank_i].size(1), ndim)) for rank_i in range(args.world_size)]
+            datas = [hidden_states.new_empty((bs, sp_len[rank_i], ndim)) for rank_i in range(args.world_size)]
+            hidden_states = all_gather(datas, hidden_states, -2)
 
         hidden_states = hidden_states[:, :num_embeds].view(
             orig_shape[0], orig_shape[-2] // 2, orig_shape[-1] // 2, orig_shape[1], 2, 2
