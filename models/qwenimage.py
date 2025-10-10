@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 import torch
 from comfy.ldm.flux.layers import EmbedND
-from comfy.ldm.modules.attention import optimized_attention_masked
+from comfy.ldm.modules.attention import attention_sage as optimized_attention_masked
 from comfy.ldm.qwen_image.model import (
     GELU,
     FeedForward,
