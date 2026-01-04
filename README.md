@@ -21,16 +21,17 @@ Join our user groups on [**Discord**](https://discord.gg/Wk6PnwX9Sm) and [**WeCh
 
 ## News
 
+- **[2025-12-26]** 🚀 **v1.1.0**: Support **4-bit [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo)**! Download on [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-z-image-turbo) or [ModelScope](https://modelscope.cn/models/nunchaku-tech/nunchaku-z-image-turbo), and try it with this [workflow](./example_workflows/nunchaku-z-image-turbo.json)!
 - **[2025-09-24]** 🔥 Released **4-bit 4/8-step Qwen-Image-Edit-2509 lightning** models at [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-qwen-image-edit-2509)! Try them out with this [workflow](./example_workflows/nunchaku-qwen-image-edit-2509-lightning.json)!
 - **[2025-09-24]** 🔥 Released **4-bit Qwen-Image-Edit-2509**! Models are available on [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-qwen-image-2509). Try them out with this [workflow](./example_workflows/nunchaku-qwen-image-edit-2509.json)!
 - **[2025-09-09]** 🔥 Released **4-bit Qwen-Image-Edit** together with the [4/8-step Lightning](https://huggingface.co/lightx2v/Qwen-Image-Lightning) variants! Models are available on [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-qwen-image). Try them out with this [workflow](./example_workflows/nunchaku-qwen-image-edit.json)!
 - **[2025-09-04]** 🚀 Official release of **Nunchaku v1.0.0**! Qwen-Image now supports **asynchronous offloading**, cutting Transformer VRAM usage to as little as **3 GiB** with no performance loss. You can also try our pre-quantized [4/8-step Qwen-Image-Lightning](https://huggingface.co/lightx2v/Qwen-Image-Lightning) models on [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-qwen-image) or [ModelScope](https://modelscope.cn/models/nunchaku-tech/nunchaku-qwen-image).
-- **[2025-08-23]** 🚀 **v1.0.0** adds support for [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image)! Check [this workflow](example_workflows/nunchaku-qwen-image.json) to get started. LoRA support is coming soon.
-- **[2025-07-17]** 📘 The official [**ComfyUI-nunchaku documentation**](https://nunchaku.tech/docs/ComfyUI-nunchaku/) is now live! Explore comprehensive guides and resources to help you get started.
 
 <details>
 <summary>More</summary>
 
+- **[2025-08-23]** 🚀 **v1.0.0** adds support for [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image)! Check [this workflow](example_workflows/nunchaku-qwen-image.json) to get started. LoRA support is coming soon.
+- **[2025-07-17]** 📘 The official [**ComfyUI-nunchaku documentation**](https://nunchaku.tech/docs/ComfyUI-nunchaku/) is now live! Explore comprehensive guides and resources to help you get started.
 - **[2025-06-29]** 🔥 **v0.3.3** now supports [FLUX.1-Kontext-dev](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)! Download the quantized model from [Hugging Face](https://huggingface.co/nunchaku-tech/nunchaku-flux.1-kontext-dev) or [ModelScope](https://modelscope.cn/models/nunchaku-tech/nunchaku-flux.1-kontext-dev) and use this [workflow](./example_workflows/nunchaku-flux.1-kontext-dev.json) to get started.
 - **[2025-06-11]** Starting from **v0.3.2**, you can now **easily install or update the [Nunchaku](https://github.com/nunchaku-tech/nunchaku) wheel** using this [workflow](https://github.com/nunchaku-tech/ComfyUI-nunchaku/blob/main/example_workflows/install_wheel.json)!
 - **[2025-06-07]** 🚀 **Release Patch v0.3.1!** We bring back **FB Cache** support and fix **4-bit text encoder loading**. PuLID nodes are now optional and won’t interfere with other nodes. We've also added a **NunchakuWheelInstaller** node to help you install the correct [Nunchaku](https://github.com/nunchaku-tech/nunchaku) wheel.
