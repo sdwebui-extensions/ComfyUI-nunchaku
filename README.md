@@ -55,4 +55,4 @@ Join our user groups on [**Discord**](https://discord.gg/Wk6PnwX9Sm) and [**WeCh
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=nunchaku-tech/ComfyUI-nunchaku&type=Date)](https://www.star-history.com/#nunchaku-tech/ComfyUI-nunchaku&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=nunchaku-ai/ComfyUI-nunchaku&type=Date)](https://www.star-history.com/#nunchaku-ai/ComfyUI-nunchaku&Date)
