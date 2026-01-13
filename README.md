@@ -6,6 +6,7 @@
 </h3>
 
 <div align="center">
+  <a href="https://trendshift.io/repositories/13942" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13942" alt="nunchaku-ai/nunchaku | Trendshift" style="width: 120px; height: 26px;" width="120" height="26"/></a>
   <a href=https://discord.gg/Wk6PnwX9Sm target="_blank"><img src=https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2FWk6PnwX9Sm%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&logo=discord&logoColor=white&label=Discord&color=green&suffix=%20total height=22px></a>
   <a href=https://huggingface.co/datasets/nunchaku-ai/cdn/resolve/main/nunchaku/assets/wechat.jpg target="_blank"><img src=https://img.shields.io/badge/WeChat-07C160?logo=wechat&logoColor=white height=22px></a>
   <a href=https://deepwiki.com/nunchaku-ai/ComfyUI-nunchaku target="_blank"><img src=https://deepwiki.com/badge.svg height=22px></a>
@@ -21,7 +22,7 @@ Join our user groups on [**Discord**](https://discord.gg/Wk6PnwX9Sm) and [**WeCh
 
 ## News
 
-- **[2026-01-12]** 🚀 **v1.2.0 Released!** Enjoy a **20–30% Z-Image performance boost**, seamless **LoRA support with native ComfyUI nodes**, **INT4 support for 20-series GPUs**, and **compatibility with ComfyUI 0.7**!
+- **[2026-01-12]** 🚀 **v1.2.0 Released!** Enjoy a **20–30%** Z-Image performance boost, seamless **LoRA support** with native ComfyUI nodes, and INT4 support for **20-series GPUs**!
 - **[2025-12-26]** 🚀 **v1.1.0**: Support **4-bit [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo)**! Download on [Hugging Face](https://huggingface.co/nunchaku-ai/nunchaku-z-image-turbo) or [ModelScope](https://modelscope.cn/models/nunchaku-tech/nunchaku-z-image-turbo), and try it with this [workflow](./example_workflows/nunchaku-z-image-turbo.json)!
 - **[2025-09-24]** 🔥 Released **4-bit 4/8-step Qwen-Image-Edit-2509 lightning** models at [Hugging Face](https://huggingface.co/nunchaku-ai/nunchaku-qwen-image-edit-2509)! Try them out with this [workflow](./example_workflows/nunchaku-qwen-image-edit-2509-lightning.json)!
 - **[2025-09-24]** 🔥 Released **4-bit Qwen-Image-Edit-2509**! Models are available on [Hugging Face](https://huggingface.co/nunchaku-ai/nunchaku-qwen-image-2509). Try them out with this [workflow](./example_workflows/nunchaku-qwen-image-edit-2509.json)!
