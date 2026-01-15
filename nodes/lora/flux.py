@@ -3,14 +3,13 @@ This module provides the :class:`NunchakuFluxLoraLoader` node
 for applying LoRA weights to Nunchaku FLUX models within ComfyUI.
 """
 
-import copy
 import logging
 import os
 
 import folder_paths
 from nunchaku.lora.flux import to_diffusers
 
-from ...wrappers.flux import ComfyFluxWrapper
+from ...wrappers.flux import ComfyFluxWrapper, copy_with_ctx
 from ..utils import get_filename_list, get_full_path_or_raise
 
 # Get log level from environment variable (default to INFO)
@@ -114,18 +113,11 @@ class NunchakuFluxLoraLoader:
         assert isinstance(model_wrapper, ComfyFluxWrapper)
         from nunchaku.lora.flux import to_diffusers
 
-        transformer = model_wrapper.model
-        model_wrapper.model = None
-        ret_model = copy.deepcopy(model)  # copy everything except the model
-        ret_model_wrapper = ret_model.model.diffusion_model
-        assert isinstance(ret_model_wrapper, ComfyFluxWrapper)
-
-        model_wrapper.model = transformer
-        ret_model_wrapper.model = transformer
-
         lora_path = get_full_path_or_raise("loras", lora_name)
-        ret_model_wrapper.loras.append((lora_path, lora_strength))
 
+        ret_model_wrapper, ret_model = copy_with_ctx(model_wrapper)
+
+        ret_model_wrapper.loras = [*model_wrapper.loras, (lora_path, lora_strength)]
         sd = to_diffusers(lora_path)
 
         # To handle FLUX.1 tools LoRAs, which change the number of input channels
@@ -259,14 +251,7 @@ class NunchakuFluxLoraStack:
         model_wrapper = model.model.diffusion_model
         assert isinstance(model_wrapper, ComfyFluxWrapper)
 
-        transformer = model_wrapper.model
-        model_wrapper.model = None
-        ret_model = copy.deepcopy(model)  # copy everything except the model
-        ret_model_wrapper = ret_model.model.diffusion_model
-        assert isinstance(ret_model_wrapper, ComfyFluxWrapper)
-
-        model_wrapper.model = transformer
-        ret_model_wrapper.model = transformer
+        ret_model_wrapper, ret_model = copy_with_ctx(model_wrapper)
 
         # Clear existing LoRA list
         ret_model_wrapper.loras = []
