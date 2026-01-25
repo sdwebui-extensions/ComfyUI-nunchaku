@@ -65,7 +65,7 @@ jobs:
           cd nunchaku
           pip install uv
           uv pip install torch==2.8 torchvision==0.23 --index-url https://download.pytorch.org/whl/cu128
-          uv pip install -e ".[ci]"
+          uv pip install -e ".[ci]" --no-build-isolation
       - name: Setup ComfyUI-Nunchaku
         run: |
           source $(conda info --base)/etc/profile.d/conda.sh
